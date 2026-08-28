@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "procmine"
+version = "0.1.0"
+description = "Where a loan-application process stalls: an event-log analysis in SQL on DuckDB."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Davide Bason", email = "davidebason@gmail.com" }]
+dependencies = [
+    "duckdb>=1.0",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "matplotlib>=3.8",
+]
+
+# pm4py is needed only to convert the raw XES log to Parquet, once.
+# Kept out of the default install so CI stays fast.
+[project.optional-dependencies]
+ingest = ["pm4py>=2.7"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "nbstripout>=0.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
