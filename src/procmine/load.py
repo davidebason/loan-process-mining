@@ -11,8 +11,9 @@ import logging
 import time
 from pathlib import Path
 
-import duckdb
 import pm4py
+
+from . import db
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def parquet_to_duckdb(parquet_path: Path, db_path: Path, table: str = "raw_event
     """
     t2 = time.time()
 
-    with duckdb.connect(str(db_path)) as con:
+    with db.connect(db_path) as con:
         con.execute(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM '{parquet_path}'")
 
         n_rows = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]

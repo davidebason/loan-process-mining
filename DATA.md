@@ -105,6 +105,63 @@ Columns: `event_id`, `case_id`, `offer_id`, `activity`, `timestamp`, `lifecycle`
 
 Note that `activity` alone does not identify an event type: `W_Call after offers` + `start` and `W_Call after offers` + `suspend` are different things. The event type is the pair `(activity, lifecycle)`.
 
+## Definitions
+
+### Case outcome
+
+**A case's outcome is whichever of `A_Pending`, `A_Cancelled` or `A_Denied` appears in it — or `NULL` if none does.**
+
+Exactly one or exactly zero of the three appears in every case: 17,228 + 10,431 + 3,752 = 31,411 with one, 98 with none, and no case has two. It is therefore a genuine single-valued attribute of a case, not a choice between competing signals.
+
+| Outcome | Cases | Share | Meaning |
+|---|---|---|---|
+| `A_Pending` | 17,228 | 54.7% | An offer was accepted |
+| `A_Cancelled` | 10,431 | 33.1% | Application lapsed or was withdrawn |
+| `A_Denied` | 3,752 | 11.9% | The bank refused |
+| `NULL` | 98 | 0.3% | Still running when the log was cut |
+
+Two alternative definitions were considered and rejected:
+
+- **"The last `A_` activity."** Agrees for all 31,411 resolved cases, but labels the 98 censored ones `A_Complete`, `A_Incomplete` or `A_Validating` — which read like outcomes and are really just where the case had got to. Censoring should be visible, not disguised.
+- **Derived from offer states.** An accepted offer implies `A_Pending` and a refused offer implies `A_Denied`, both without exception. But 32 denied cases have only a cancelled offer, making them indistinguishable from the 10,431 cancelled ones; the 98 censored cases have no offer outcome at all; and offers run at 1.36 per case, so "the offer state" is not single-valued and would need aggregating. Offer states are used for offer-level questions instead.
+
+### `A_Pending` is the success state
+
+The name suggests "undecided". It is not. **`A_Pending` occurs when and only when an offer is accepted** — every `A_Pending` case has an `O_Accepted` event and every case with one is `A_Pending`, 17,228 in both directions with no exceptions. It is also never performed by the automation account, and never co-occurs with `A_Cancelled` or `A_Denied`.
+
+**Caveat for `REPORT.md`:** an accepted offer is not a disbursed loan. This log ends at acceptance; whether the money was paid, or the agreement later fell through, is outside the dataset. The defensible claim is *"the application completed successfully with an accepted offer"*, never *"the customer received a loan"*.
+
+### `A_Cancelled` versus `A_Denied`
+
+The two differ in who ends the case and how far it got.
+
+| | Distinct resources | Performed by `User_1` | Fraud check | Reached "documents incomplete" |
+|---|---|---|---|---|
+| `A_Pending` | 40 | 0% | 0.6% | 73.4% |
+| `A_Cancelled` | 108 | **76.2%** | 0.3% | **9.2%** |
+| `A_Denied` | 99 | 0% | **4.5%** | 36.1% |
+
+`User_1` is the automation account — it fires several events within seconds at case creation.
+
+**`A_Denied` is never automated.** A named person performs it every time, denied cases receive a fraud assessment fifteen times more often than others, and most got far enough for someone to assess them. It reads as an active refusal by the bank.
+
+**`A_Cancelled` is automated three times in four**, and 91% of cancelled cases never reach the document stage at all. It reads as a lapse or early drop-out rather than a deliberate cancellation.
+
+**Limit:** the log records which account performed an event, not who decided. "The applicant cancelled" is consistent with the data but not demonstrated by it. Any statement about intent belongs in the caveats.
+
+### Two different "accepted"s
+
+`A_Accepted` and `O_Accepted` are unrelated events at opposite ends of the process, and confusing them would corrupt every duration computed from them.
+
+- **`A_Accepted`** — 31,509 events, one per case, near the start. The bank accepting the *application* into processing.
+- **`O_Accepted`** — 17,228 events, at the end. The customer accepting an *offer*.
+
+### An aborted work item is not a case ending
+
+A `W_` event with lifecycle `ate_abort` is a *task* being abandoned. The case continues afterwards and reaches its own terminal state separately. Any measure of "the last event of a case" must not treat a work-item abort as the end.
+
+---
+
 ## Decisions
 
 | # | Decision | Reasoning | Risk accepted |
