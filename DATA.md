@@ -22,6 +22,26 @@ Written as the work happens, never reconstructed afterwards. Every number in `RE
 
 The log covers a Dutch financial institution's loan-application process for applications filed between 2016-01-01 and 2017-02-01 (397 days).
 
+### What the publisher documents, and what it does not
+
+Two official sources, both thin.
+
+The [4TU dataset page](https://data.4tu.nl/articles/_/12696884/1) gives the process description and one structural fact: *"the system now allows for multiple offers per application. These offers can be tracked through their IDs in the log."*
+
+The [BPI Challenge 2017 page](https://ais.win.tue.nl/bpi/2017/challenge.html) adds the three event types (Application, Offer, Workflow), the attribute list at application and offer level, and the count of 149 originators. Its headline figures agree exactly with the ones loaded here: 1,202,267 events, 31,509 applications, 42,995 offers.
+
+**One attribute it explains that would otherwise look redundant.** Lifecycle information is provided *"both in the form of the standard XES lifecycle as well as the internally used lifecycle events."* So `Action` (`Created` / `statechange` / `Obtained` / `Released` / `Deleted`) is the institution's own internal vocabulary, not a duplicate of `lifecycle:transition`. It was dropped from `events` as redundant for this analysis, which remains the right call — but the reason is now documented rather than assumed.
+
+**What neither source defines**, and what therefore had to be established empirically from the log itself:
+
+- the meaning of `A_Pending`, `A_Cancelled` and `A_Denied` as outcomes
+- the meaning of `complete` on a work item
+- the meaning of the `Accepted` and `Selected` flags on an offer
+- that `User_1` is an automation account
+- the existence of the 30-day offer expiry
+
+Every one of those is recorded in the Definitions section with the evidence behind it.
+
 ### Which log, and why
 
 BPI Challenge 2017 was used rather than the smaller 2012 log. The 2012 fallback was reserved in case 2017 would not fit in memory on the development machine (7.6 GiB available to WSL2). It did: the parsed frame occupies **0.38 GB**, because pm4py returns Arrow-backed string columns rather than Python objects. Decision taken at roughly hour 3 and not revisited.
