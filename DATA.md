@@ -149,6 +149,105 @@ The two differ in who ends the case and how far it got.
 
 **Limit:** the log records which account performed an event, not who decided. "The applicant cancelled" is consistent with the data but not demonstrated by it. Any statement about intent belongs in the caveats.
 
+### `A_Cancelled` is two mechanisms, not one
+
+The 10,431 cancellations split into two populations with opposite behaviour. Any statistic that does not separate them is misleading, including the headline that "cancelled cases take 2.1x longer than successful ones".
+
+| | Automated (`User_1`) | Human |
+|---|---|---|
+| Cases | 7,953 (76.2%) | 2,478 (23.8%) |
+| Median days idle before cancellation | 26.8 | **0.20** |
+| Share cancelled the same day as the last event | — | 60.5% (1,498) |
+| Share idle more than 30 days | 7.6% (604) | **0.0% (0)** |
+| Median days from case start | 31.9 | 10.9 |
+
+**Humans cancel immediately.** Three in five human cancellations happen on the same day as the last activity in the case, and none ever follows more than 28 days of inactivity.
+
+**The automation enforces a 30-day offer expiry.** Measured from the offer being sent:
+
+| | n | mean | **std dev** | min | p90 | max |
+|---|---|---|---|---|---|---|
+| Automated | 7,932 | 30.718 | **0.155** | 30.014 | 30.905 | 32.563 |
+| Human | 2,389 | 14.596 | 16.412 | ~0 | 36.169 | 167.115 |
+
+A standard deviation of 0.155 days — **3 hours 40 minutes** — across 7,932 cases is not a behaviour, it is a rule. The minimum is 30.014 days and no automated cancellation occurs before it. The median at 30.72 rather than 30.00 indicates a scheduled sweep that catches expired offers within a day of the threshold; the few reaching 32.5 days are consistent with weekends.
+
+(7,932 rather than 7,953 because 21 automated cases had no offer sent; likewise 2,389 of 2,478 human ones. The 110 difference matches the count of cancelled cases with no `O_Sent` event.)
+
+**Why the inactivity gap peaks at 26 days rather than 30.** The clock runs from the offer, not from the last event. After an offer is sent a few events typically follow over the next days — `O_Created`, a call attempt — and then nothing. So the last activity sits roughly four days into the thirty, leaving a 26-day silence before the sweep fires: 4,312 of 7,953 automated cancellations fall in day 26, and 81.6% in days 25 to 27. The three anchors reconcile: 30.7 from offer, minus ~4 days of residual activity, gives 26.8 from last event.
+
+**Consequence for the analysis.** 7,953 applications — 25.2% of the entire year's volume — were idle for a month and then closed by a scheduled job with no human involvement. They are the largest single block of dead time in the process. Reporting cancelled cases as one group hides this entirely.
+
+### Offer size barely affects how long a customer takes to accept
+
+**Hypothesis tested and rejected.** If larger loans took materially longer to consider, then shortening the offer expiry would destroy disproportionately large loans, and the cost of that change would be understated by a headcount alone. Three tests, all pointing the same way.
+
+**1 — Acceptance delay by offer size**, across successful cases:
+
+| quintile | offered amount | n | median days to accept |
+|---|---|---|---|
+| 1 | EUR 5,000-8,000 | 3,446 | 11.68 |
+| 2 | EUR 8,000-14,000 | 3,446 | 11.79 |
+| 3 | EUR 14,000-18,000 | 3,446 | 11.97 |
+| 4 | EUR 18,000-27,000 | 3,445 | 12.15 |
+| 5 | EUR 27,000-75,000 | 3,445 | 13.81 |
+
+Monotone across all five, so the effect is real rather than noise. But the largest quintile takes only 2.1 days longer than the smallest, on a base of about 12.
+
+**2 — Correlation.** Pearson r between `offered_amount` and days-to-accept is **0.086** (0.082 against log amount). That is r-squared below 0.008: offer size explains under 1% of the variation.
+
+**3 — The decisive comparison.** If size mattered, the share of *principal* lost under a shortened expiry would run well above the share of *conversions* lost. It does not:
+
+| expiry threshold | % conversions lost | % principal lost | difference |
+|---|---|---|---|
+| 7 days | 83.7 | 84.9 | +1.2 |
+| 14 days | 39.9 | 42.7 | +2.8 |
+| 21 days | 18.6 | 19.9 | +1.3 |
+| 25 days | 12.1 | 13.6 | +1.5 |
+| 30 days | 6.9 | 7.9 | +1.0 |
+
+Offers lost at a 14-day cut-off are roughly 7% larger than the average accepted offer. Consistent, and immaterial.
+
+**Conclusion.** The cost of a shorter expiry is not driven by large loans. It is driven by the fact that the *typical* customer takes about twelve days to accept, whatever the amount — so any deadline near two weeks cuts close to the middle of the distribution rather than at its tail. Reporting conversions lost is therefore sufficient; principal lost tracks it almost exactly and adds precision rather than a different conclusion.
+
+### What the log can and cannot establish about chasing
+
+The bank's only mechanism for chasing an unanswered offer is the phone call. There is no reminder, email or SMS activity in the log, and `W_` work items carry no `offer_id`, so a call can be attached to a case but never to a particular offer.
+
+**Established by the data:**
+
+- A call is recorded as an *attempt*, not an outcome. No field records whether anyone answered.
+- The chase is two attempts, a median of **3.99 days** apart. 71.7% of cases get exactly two; 91.4% get one or two.
+- Attempts three and beyond are same-session redials, not further chasing: the median gap from attempt 2 to 3 is **0.01 days**, about fifteen minutes.
+- Chasing is abandoned a median of 4.74 days after the second attempt, so it stops around **day 9**. The offer stays live until day 30.
+- 7,932 cases end in an automated cancellation after that silence.
+
+**Not established by the data, and not knowable from it:**
+
+Whether chasing later would convert anyone. The observational relationship runs the wrong way:
+
+| call attempts | cases | acceptance rate |
+|---|---|---|
+| 1 | 6,220 | 59.5% |
+| 2 | 22,494 | 53.9% |
+| 3 | 1,969 | 54.1% |
+| 4+ | 679 | 51.0% |
+
+More calls, lower acceptance — but the causation is reversed. A customer who was always going to accept does so quickly and needs one call; a customer drifting away gets called again. The second call is *caused by* the reluctance it appears to be associated with. No treatment of this log removes that confounding.
+
+**Consequence for the recommendation.** The size of the gap is a fact and can be stated. The effect of filling it is not, and must not be claimed. The defensible recommendation is to *test* an intervention in that window, not to assert its return.
+
+### `W_Call after offers` with lifecycle `complete`: tested, inconclusive
+
+342 of 60,615 attempts (0.56%) are recorded as `complete` rather than ending in `suspend`. Whether this means the customer answered was tested and could not be resolved:
+
+- **For:** in all 169 of the 341 such cases that went on to accept, acceptance followed the completed call, a median of 6.25 days later.
+- **Against that test:** calls occur shortly after the offer and acceptance comes later, so acceptance follows calls in nearly every case regardless. The test does not discriminate.
+- **Against the reading:** a 0.56% answer rate is implausible for a call centre, and cases with a completed call accept at 49.6% versus 54.7% without — the wrong direction if answering helped.
+- **Ambiguous:** `start -> complete` lasts a median 26 s (shorter than a no-answer at 141 s), but `resume -> complete` lasts 89 s (longer than 29 s).
+
+At 1.1% of cases the field cannot support a finding either way. Treated as an administrative state of unknown meaning.
+
 ### Two different "accepted"s
 
 `A_Accepted` and `O_Accepted` are unrelated events at opposite ends of the process, and confusing them would corrupt every duration computed from them.
