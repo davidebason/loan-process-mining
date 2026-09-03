@@ -293,6 +293,33 @@ A `W_` event with lifecycle `ate_abort` is a *task* being abandoned. The case co
 | 6 | `CreditScore = 0` handling | **OPEN** | |
 | 7 | `RequestedAmount = 0` handling | **OPEN** | |
 
+### Decision 6 — what counts as a transition, for waiting-time analysis
+
+Three choices, all made for the Q2 transition ranking.
+
+**An event type is the pair `(activity, transition)`, not the activity alone.** `W_Call after offers` + `start` and the same activity + `suspend` are different occurrences: one is a person picking up a task, the other is putting it down. Ranking on activity alone would merge them and average a two-minute call with a four-day silence.
+
+**Gaps shorter than one second are flagged as automatic bookkeeping** (flagged rather than dropped, so that summed gaps still reconcile to case duration). The system emits cascades of events within milliseconds of one another — `Application_652823628` fires five inside 27 ms. These are one logical act recorded as several rows, not intervals during which anything waited. Including them would fill the ranking with hundreds of thousands of near-zero "transitions" and dilute every total. The threshold is a judgement: one second is comfortably above machine cascades and comfortably below any human interval.
+
+**Measured cost of the rule:** 525,856 of the 1,170,758 transitions are sub-second — **44.9% of all pairs** — and together they account for **12.11 hours, or 0.0001% of total elapsed time**. Nearly half the rows carry one ten-thousandth of a percent of the time, so excluding them from the ranking changes no total materially while removing an enormous amount of noise.
+
+**Waiting is ranked two ways, and both are reported.** Total accumulated gap answers *where does the elapsed time go* — the client's question — and is dominated by frequent transitions. Median gap answers *which handoff is individually slowest*, which is usually the one worth fixing. A transition occurring 500,000 times with a one-hour median outweighs one occurring 100 times with a thirty-day median; reporting only the first would hide the second, and only the second would misstate the scale. Frequency is shown alongside so neither can be misread.
+
+**A transition's identity is the full quadruple `(from_activity, from_transition, to_activity, to_transition)`.** Grouping on the first three alone — omitting where the transition *goes* — merges 179 groups that should be 427: **80 groups silently pool 328 different destinations**. The error is not cosmetic. `W_Call after offers / suspend / complete` looked like a single transition with an 11,487-strong sample and a 25.5-day median, inviting the reading "the call takes 25 days to complete". It is two unrelated things:
+
+| from | to | n | median |
+|---|---|---:|---:|
+| `W_Call after offers` `suspend` | `A_Cancelled` `complete` | 7,573 | 26.7 days |
+| `W_Call after offers` `suspend` | `O_Create Offer` `complete` | 3,636 | 2.9 days |
+
+One is the offer-expiry clock running out; the other is a fresh offer three days later. The pooled median described neither, and only 341 cases in the entire log ever emit a `W_Call after offers` + `complete` event, so the natural reading of the merged row was false. Section 1 of `analysis/06_waiting.sql` omits `to_activity` legitimately, because it filters to `same_activity` and there `to_activity = from_activity` by construction.
+
+**The tell was a degenerate spread.** `W_Call after offers / schedule / complete` reported a median of 648.46 hours against a p90 of 648.48 — one minute apart across 1,192 observations. A distribution that tight is a machine timer, not a process. Any group whose p50 and p90 nearly coincide should be interrogated before it is ranked.
+
+**Median rankings carry `HAVING COUNT(*) >= 100`.** A median is scale-free: one observation with a 112-day gap produces a 112-day median. Without the guard the median ranking opened on groups of n = 1, 2 and 6 — single cases presented as process characteristics — burying the genuine result. One hundred is a judgement, chosen so a median rests on roughly fifty observations either side; it is applied only to the median-ordered section, because the total-ordered sections exclude tiny groups automatically (a group of one cannot accumulate a large total).
+
+**Right-censored cases are analysed separately.** The 98 cases with no terminal state have tails truncated by the log's cut-off rather than by anything the process did. Their final transition is an artefact of the extract date and is examined on its own rather than pooled into the ranking.
+
 ### Decision 5 — which events count
 
 `events` keeps **all 1,202,267 rows**. No filtering is applied when the table is built.
@@ -345,3 +372,9 @@ Feeds the caveats section of `REPORT.md`.
 6. **Both flags are retrospective.** They are stamped on the `O_Create Offer` row, at creation time, when the outcome could not have been known. Harmless for diagnostic work; they would leak the target in any predictive model.
 7. **The log is right-censored at 2017-02-01.** 98 cases (0.3%) reach no terminal state; 174 offers and 174 work items are left open. These are cases still in flight when the extract was taken, and they bias any duration measure downward if included naively.
 8. **Waiting time cannot be separated from handling time.** The log records when activities happened, not how long anyone worked. A five-day gap may be five days of queuing or one day of work started four days late. No transformation of this data can distinguish them.
+
+   **The related concurrency risk is real but small, and bounded.** Attributing a gap to one work item assumes the case held only that item open. Sweeping +1 at each `schedule` and -1 at each `complete` / `ate_abort` / `withdraw` over every case's timeline: **31,435 cases (99.77%) never hold more than one work item open at once, and 74 cases (0.23%) reach two.** None reaches three. The sweep never goes negative, and 149,104 `schedule` events less 148,930 closes leaves 174 items open — matching the 174 open work items in issue 7 exactly, which is what makes the sweep trustworthy. So the handling/waiting split in `analysis/06_waiting.sql` is a genuine approximation, but it can be wrong for at most a quarter of one percent of cases.
+
+9. **`epoch(interval)` is not daylight-saving safe, and was initially used throughout.** Subtracting two `TIMESTAMPTZ` values yields a *calendar* interval, which `epoch()` then converts at 86,400 seconds per day. Across a spring-forward, two calendar days are 47 hours rather than 48, so every duration spanning a transition was wrong by exactly one hour. **3,558 cases (11.3%) span the 27 March or 30 October 2016 boundaries.** The magnitude is small — an hour on a median 19-day case is 0.2%, and no headline figure moved — but it is a genuine defect. Corrected everywhere to `epoch(a) - epoch(b)`, which converts each timestamp to absolute epoch seconds before subtracting and so never touches the calendar.
+
+   **Found by an assertion, not by inspection.** The check that summed consecutive gaps must equal a case's first-to-last elapsed time returned 3 disagreements out of 31,509, each of exactly ±3,600 seconds. That is the argument for writing reconciliation assertions: the defect was invisible in every individual number and unmistakable in the aggregate.
