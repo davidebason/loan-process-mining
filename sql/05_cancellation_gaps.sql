@@ -65,7 +65,7 @@ WITH joined_with_prev AS (
     SELECT 
         c.case_id, 
         'case_start' AS gap_from, 
-        epoch(cancelled_at - MIN(event_time)) / 86400.0 AS gap_days
+        (epoch(cancelled_at) - epoch(MIN(event_time))) / 86400.0 AS gap_days
     FROM cancellations c JOIN events e ON c.case_id = e.case_id
     GROUP BY c.case_id, cancelled_at
 UNION ALL
@@ -74,7 +74,7 @@ UNION ALL
     SELECT 
         case_id, 
         'previous_event' AS gap_from, 
-        epoch(cancelled_at - prev_time) / 86400.0 AS gap_days
+        (epoch(cancelled_at) - epoch(prev_time)) / 86400.0 AS gap_days
         FROM joined_with_prev
     WHERE activity = 'A_Cancelled'
 UNION ALL
@@ -82,7 +82,7 @@ UNION ALL
     SELECT 
         c.case_id, 
         'offer_sent' AS gap_from,
-        epoch(cancelled_at - MAX(e.event_time)) / 86400.0 AS gap_days
+        (epoch(cancelled_at) - epoch(MAX(e.event_time))) / 86400.0 AS gap_days
     FROM cancellations c JOIN events e ON c.case_id = e.case_id
     WHERE starts_with(e.activity, 'O_Sent')
     GROUP BY c.case_id, cancelled_at

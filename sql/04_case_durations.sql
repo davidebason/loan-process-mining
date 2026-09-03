@@ -15,7 +15,7 @@ SELECT
     case_id,
     MIN(event_time) AS first_event,
     MAX(event_time) AS last_event,
-    epoch(MAX(event_time) - MIN(event_time)) / 3600.0 AS duration_hours,
+    (epoch(MAX(event_time)) - epoch(MIN(event_time))) / 3600.0 AS duration_hours,
     COUNT(*) AS n_events,
     MAX(CASE WHEN activity IN ('A_Pending', 'A_Cancelled', 'A_Denied')
          THEN activity END) AS outcome

@@ -32,7 +32,7 @@ sent AS (
 SELECT
     a.case_id,
     o.offered_amount,
-    epoch(a.accepted_at - s.sent_at) / 86400.0 AS gap_days
+    (epoch(a.accepted_at) - epoch(s.sent_at)) / 86400.0 AS gap_days
 FROM accepted a
 JOIN sent   s ON s.offer_id = a.offer_id
 JOIN offers o ON o.offer_id = a.offer_id;

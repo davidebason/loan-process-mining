@@ -67,7 +67,7 @@ joined AS (
         -- interest never earned, not the principal never lent. Gross, because
         -- cost of funds, defaults and servicing are not in this data.
         o.monthly_cost * o.number_terms - o.offered_amount AS gross_interest,
-        epoch(a.accepted_at - s.sent_at) / 86400.0 AS gap_days
+        (epoch(a.accepted_at) - epoch(s.sent_at)) / 86400.0 AS gap_days
     FROM accepted a
     JOIN sent   s ON s.offer_id = a.offer_id
     JOIN offers o ON o.offer_id = a.offer_id

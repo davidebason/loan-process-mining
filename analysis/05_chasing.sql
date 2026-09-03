@@ -38,7 +38,7 @@ WITH seq AS (
 SELECT
     transition || ' -> ' || COALESCE(nxt, '(none)')  AS path,
     COUNT(*)                                        AS n,
-    ROUND(MEDIAN(epoch(nxt_time - event_time)), 1)  AS median_seconds
+    ROUND(MEDIAN(epoch(nxt_time) - epoch(event_time)), 1)  AS median_seconds
 FROM seq
 GROUP BY 1
 ORDER BY n DESC
@@ -66,8 +66,8 @@ FROM per_case GROUP BY n ORDER BY n LIMIT 10;
 SELECT
     attempt_no,
     COUNT(*)                                                     AS n,
-    ROUND(MEDIAN(epoch(event_time - prev_attempt) / 86400.0), 2) AS median_days,
-    ROUND(MAX(epoch(event_time - prev_attempt) / 86400.0), 2)    AS max_days
+    ROUND(MEDIAN((epoch(event_time) - epoch(prev_attempt)) / 86400.0), 2) AS median_days,
+    ROUND(MAX((epoch(event_time) - epoch(prev_attempt)) / 86400.0), 2)    AS max_days
 FROM attempts
 WHERE prev_attempt IS NOT NULL
 GROUP BY attempt_no
