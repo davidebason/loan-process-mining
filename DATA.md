@@ -290,8 +290,24 @@ A `W_` event with lifecycle `ate_abort` is a *task* being abandoned. The case co
 | 3 | Three tables (`cases`, `offers`, `events`), offers kept **separate** from events | Each fact stored once at its own grain. Prevents counting a EUR 20,000 loan 38 times, and removes the 96% null columns | An extra join for offer attributes |
 | 4 | Session timezone fixed to **`Europe/Amsterdam`** | See below | See below |
 | 5 | `events` keeps **every** row of the raw log (1,202,267). Lifecycle filtering happens inside each query, not at load time | Raw fact-table pattern: nothing is discarded before anyone knows whether it matters, and abandoned work is where delay hides | Every query must state its own filter; system-generated cascades produce millisecond transitions that each gap calculation has to exclude explicitly |
-| 6 | `CreditScore = 0` handling | **OPEN** | |
-| 7 | `RequestedAmount = 0` handling | **OPEN** | |
+| 6 | What counts as a transition, for the Q2 waiting analysis | See below | See below |
+| 7 | What counts as a repetition, for the Q3 rework analysis | See below | See below |
+| 8 | `CreditScore = 0` handling | **OPEN** | |
+| 9 | `RequestedAmount = 0` handling | **OPEN** | |
+
+### Decision 7 — what counts as a repetition, for rework analysis
+
+Four choices, all made for the Q3 rework ranking in `analysis/07_rework.sql`.
+
+**A repetition is the same `(activity, transition)` pair occurring more than once within one case.** Not the same activity alone: `W_Validate application` emitting `suspend` twice is a loop, but `suspend` followed by `resume` is one work item being picked up again, and counting the activity alone would merge them. This is the same grain rule as decision 6, applied within a case rather than between consecutive events.
+
+**Adjacency is not required, and requiring it destroys the measure.** An earlier version defined repetition as two identical consecutive events — `from_activity = to_activity AND from_transition = to_transition` on the `transitions` table. That captures **11,702 of 330,747 repeats, 3.5%**, because repetition in this log is almost never adjacent: `W_Validate application` repeats as `suspend → resume → suspend`, with a `resume` in between. Worse, **99.9% of the 11,702 it does capture are sub-second** (median gaps of 2–9 ms) — they are the machine cascades of decision 6, so the measure returned the logging artefact rather than the process. Recorded because the failure is not visible in the output: the ranking it produces looks plausible and is entirely wrong.
+
+**Elapsed time is attributed to the activity that *ends* the wait, not the one that starts it.** `07` computes each gap with `LAG` partitioned by `case_id`, so `gap_seconds` is the time from the previous event of any kind up to this one — "how long the case waited to reach this activity". `06` uses the `transitions` table grouped by `from_activity`, which attributes the same interval to the activity the case was waiting *in*. **The two files therefore rank the same intervals under different names, and a reader comparing them without knowing this will conclude they contradict.** `O_Create Offer` is the clearest case: 0.53 days under `06` (nothing waits after an offer is written) and 26,509 days under `07` (a great deal waits before one is re-created). Both numbers are correct.
+
+**Two totals are reported, and the difference between them is the point.** `total_gap_days` counts every occurrence including the first; `repeat_gap_days` counts only occurrences 2, 3, … identified by `ROW_NUMBER()` within `(case_id, activity, transition)`. The first visit is the one-off wait to reach the activity and is not rework. The gap between the two is large and uneven — for `W_Validate application resume`, 17,993 of 27,091 days sit in first visits, so reporting the total alone would overstate its rework nearly threefold.
+
+   **A rejected shortcut, recorded because it is arithmetically seductive.** `AVG(gap) × COUNT` does equal `SUM(gap)` exactly — verified across all 187,302 groups to within 10⁻⁹ seconds. But it holds only with `COUNT(gap_seconds)`, since `AVG` skips NULLs while a row count does not, and it cannot produce `repeat_gap_days` at all: subtracting one *mean* per case is not the same as subtracting the first occurrence's *actual* gap. Using `AVG × (COUNT(*) - 1)` shifted individual rows by −40% to +256% and reordered the ranking. Sums are carried through from the first stage instead.
 
 ### Decision 6 — what counts as a transition, for waiting-time analysis
 
