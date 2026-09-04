@@ -85,7 +85,7 @@ Cutting the expiry from 30 days to 14 would reduce median cycle time from 19.1 t
 
 **Act on the silent window instead.** The opportunity is not the length of the timer but the 26.8 days of nothing before it fires. 7,932 applications sit untouched for that period and are then closed by a system account without anyone having decided anything. The bank stops trying on roughly day 8 of a 30-day window.
 
-Concretely: **run a randomised trial of one further contact at around day 14** — after the existing two attempts have failed, well before the expiry. Randomised rather than observational, for the reason in the caveats. The cost is one contact per application. The prize is a share of 7,932 applications currently closed without a decision, against an average accepted application of **€18,909** of principal.
+Concretely: **run a randomised trial of one further contact at around day 14** — after the existing two attempts have failed, well before the expiry. Randomised rather than observational, for the reason in the caveats. The cost is one contact per application. The return is a share of 7,932 applications currently closed without a decision, against an average accepted application of **€18,909** of principal.
 
 **Then ask why a quarter of applications need a second offer.** 8,559 do, at a cost of 26,209 days — and creating the replacement takes under half an hour, so the delay is entirely in the time taken to decide one is needed. Since those applications convert *better* than average, the goal is not to eliminate the loop but to reach the same offer sooner. Why the first offer misses cannot be answered from this log: the offer attributes that would explain it are unusable (see caveats).
 
