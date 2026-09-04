@@ -1,8 +1,9 @@
 -- analysis/03_outcome_semantics.sql
 --
 -- Establishes what the outcome activities mean. Neither the 4TU page nor the
--- BPI Challenge page defines them, so every claim in DATA.md's Definitions
--- section is derived here.
+-- BPI Challenge page defines them, so the outcome claims in DATA.md's
+-- Definitions section are derived here. Section 5 below also feeds
+-- "What the data can and cannot support" -> "A_Cancelled is two mechanisms".
 --
 -- Reads: events
 

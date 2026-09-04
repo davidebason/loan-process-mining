@@ -4,6 +4,18 @@ Written as the work happens, never reconstructed afterwards. Every number in `RE
 
 ---
 
+## Contents
+
+- [Source](#source)
+- [Retrieval](#retrieval)
+- [Load procedure](#load-procedure)
+- [Completeness — the data is unusually clean](#completeness--the-data-is-unusually-clean)
+- [Data model](#data-model)
+- [Definitions](#definitions)
+- [What the data can and cannot support](#what-the-data-can-and-cannot-support)
+- [Decisions](#decisions)
+- [Known data quality issues](#known-data-quality-issues)
+
 ## Source
 
 | | |
@@ -127,6 +139,7 @@ Note that `activity` alone does not identify an event type: `W_Call after offers
 
 ## Definitions
 
+What a term means in this repository. Results established from the data live in the next section; a reader looking up a word should not have to read an analysis to find it.
 ### Case outcome
 
 **A case's outcome is whichever of `A_Pending`, `A_Cancelled` or `A_Denied` appears in it — or `NULL` if none does.**
@@ -169,6 +182,22 @@ The two differ in who ends the case and how far it got.
 
 **Limit:** the log records which account performed an event, not who decided. "The applicant cancelled" is consistent with the data but not demonstrated by it. Any statement about intent belongs in the caveats.
 
+### Two different "accepted"s
+
+`A_Accepted` and `O_Accepted` are unrelated events at opposite ends of the process, and confusing them would corrupt every duration computed from them.
+
+- **`A_Accepted`** — 31,509 events, one per case, near the start. The bank accepting the *application* into processing.
+- **`O_Accepted`** — 17,228 events, at the end. The customer accepting an *offer*.
+
+### An aborted work item is not a case ending
+
+A `W_` event with lifecycle `ate_abort` is a *task* being abandoned. The case continues afterwards and reaches its own terminal state separately. Any measure of "the last event of a case" must not treat a work-item abort as the end.
+
+---
+
+## What the data can and cannot support
+
+Results established while building the model, and the limits they impose on what may be claimed. These are not definitions: they were found, not chosen, and each one constrains how a number in [`REPORT.md`](REPORT.md) may be read.
 ### `A_Cancelled` is two mechanisms, not one
 
 The 10,431 cancellations split into two populations with opposite behaviour. Any statistic that does not separate them is misleading, including the headline that "cancelled cases take 2.1x longer than successful ones".
@@ -268,46 +297,61 @@ More calls, lower acceptance — but the causation is reversed. A customer who w
 
 At 1.1% of cases the field cannot support a finding either way. Treated as an administrative state of unknown meaning.
 
-### Two different "accepted"s
-
-`A_Accepted` and `O_Accepted` are unrelated events at opposite ends of the process, and confusing them would corrupt every duration computed from them.
-
-- **`A_Accepted`** — 31,509 events, one per case, near the start. The bank accepting the *application* into processing.
-- **`O_Accepted`** — 17,228 events, at the end. The customer accepting an *offer*.
-
-### An aborted work item is not a case ending
-
-A `W_` event with lifecycle `ate_abort` is a *task* being abandoned. The case continues afterwards and reaches its own terminal state separately. Any measure of "the last event of a case" must not treat a work-item abort as the end.
-
----
-
 ## Decisions
+
+Numbers are stable identifiers, cited from `sql/`, `analysis/`, `tests/` and `src/`. They are never reused or reassigned. Rows marked *(detail below)* have a section of their own.
 
 | # | Decision | Reasoning | Risk accepted |
 |---|---|---|---|
 | 1 | Use BPI 2017, not 2012 | Fits in memory at 0.38 GB; richer log with offer-level detail | None material |
 | 2 | Convert once to DuckDB; all analysis in SQL, pandas for plotting only | Reproducibility, and the analysis stays close to how it would be done against a client warehouse | Slower to write than pandas at first |
 | 3 | Three tables (`cases`, `offers`, `events`), offers kept **separate** from events | Each fact stored once at its own grain. Prevents counting a EUR 20,000 loan 38 times, and removes the 96% null columns | An extra join for offer attributes |
-| 4 | Session timezone fixed to **`Europe/Amsterdam`** | See below | See below |
-| 5 | `events` keeps **every** row of the raw log (1,202,267). Lifecycle filtering happens inside each query, not at load time | Raw fact-table pattern: nothing is discarded before anyone knows whether it matters, and abandoned work is where delay hides | Every query must state its own filter; system-generated cascades produce millisecond transitions that each gap calculation has to exclude explicitly |
-| 6 | What counts as a transition, for the Q2 waiting analysis | See below | See below |
-| 7 | What counts as a repetition, for the Q3 rework analysis | See below | See below |
+| 4 *(detail below)* | Session timezone fixed to **`Europe/Amsterdam`** | See below | See below |
+| 5 *(detail below)* | `events` keeps **every** row of the raw log (1,202,267). Lifecycle filtering happens inside each query, not at load time | Raw fact-table pattern: nothing is discarded before anyone knows whether it matters, and abandoned work is where delay hides | Every query must state its own filter; system-generated cascades produce millisecond transitions that each gap calculation has to exclude explicitly |
+| 6 *(detail below)* | What counts as a transition, for the Q2 waiting analysis | See below | See below |
+| 7 *(detail below)* | What counts as a repetition, for the Q3 rework analysis | See below | See below |
 | 8 | `CreditScore = 0` handling | **OPEN** | |
 | 9 | `RequestedAmount = 0` handling | **OPEN** | |
 
-### Decision 7 — what counts as a repetition, for rework analysis
+### Decision 4 — timezone
 
-Four choices, all made for the Q3 rework ranking in `analysis/07_rework.sql`.
+`time:timestamp` is stored as `TIMESTAMP WITH TIME ZONE`: an absolute instant, displayed in whatever the session timezone happens to be. The development machine is set to `Asia/Shanghai`, so DuckDB was rendering the first event as `2016-01-01 17:51:15.304+08` while the same instant is `09:51:15.304+00:00` in UTC.
 
-**A repetition is the same `(activity, transition)` pair occurring more than once within one case.** Not the same activity alone: `W_Validate application` emitting `suspend` twice is a loop, but `suspend` followed by `resume` is one work item being picked up again, and counting the activity alone would merge them. This is the same grain rule as decision 6, applied within a case rather than between consecutive events.
+**All timestamps in this project are interpreted in `Europe/Amsterdam`**, the timezone the business actually operated in. A Dutch bank's "Monday morning" is a fact about Amsterdam, not about the analyst's laptop.
 
-**Adjacency is not required, and requiring it destroys the measure.** An earlier version defined repetition as two identical consecutive events — `from_activity = to_activity AND from_transition = to_transition` on the `transitions` table. That captures **11,702 of 330,747 repeats, 3.5%**, because repetition in this log is almost never adjacent: `W_Validate application` repeats as `suspend → resume → suspend`, with a `resume` in between. Worse, **99.9% of the 11,702 it does capture are sub-second** (median gaps of 2–9 ms) — they are the machine cascades of decision 6, so the measure returned the logging artefact rather than the process. Recorded because the failure is not visible in the output: the ranking it produces looks plausible and is entirely wrong.
+Every SQL file and every database connection sets this explicitly:
 
-**Elapsed time is attributed to the activity that *ends* the wait, not the one that starts it.** `07` computes each gap with `LAG` partitioned by `case_id`, so `gap_seconds` is the time from the previous event of any kind up to this one — "how long the case waited to reach this activity". `06` uses the `transitions` table grouped by `from_activity`, which attributes the same interval to the activity the case was waiting *in*. **The two files therefore rank the same intervals under different names, and a reader comparing them without knowing this will conclude they contradict.** `O_Create Offer` is the clearest case: 0.53 days under `06` (nothing waits after an offer is written) and 26,509 days under `07` (a great deal waits before one is re-created). Both numbers are correct.
+```sql
+SET TimeZone = 'Europe/Amsterdam';
+```
 
-**Two totals are reported, and the difference between them is the point.** `total_gap_days` counts every occurrence including the first; `repeat_gap_days` counts only occurrences 2, 3, … identified by `ROW_NUMBER()` within `(case_id, activity, transition)`. The first visit is the one-off wait to reach the activity and is not rework. The gap between the two is large and uneven — for `W_Validate application resume`, 17,993 of 27,091 days sit in first visits, so reporting the total alone would overstate its rework nearly threefold.
+Durations are unaffected by this setting — subtraction operates on absolute instants either way. It matters for anything referencing clock time: hour of day, day of week, overnight and weekend effects, and the March and October DST boundaries, both of which fall inside the log window.
 
-   **A rejected shortcut, recorded because it is arithmetically seductive.** `AVG(gap) × COUNT` does equal `SUM(gap)` exactly — verified across all 187,302 groups to within 10⁻⁹ seconds. But it holds only with `COUNT(gap_seconds)`, since `AVG` skips NULLs while a row count does not, and it cannot produce `repeat_gap_days` at all: subtracting one *mean* per case is not the same as subtracting the first occurrence's *actual* gap. Using `AVG × (COUNT(*) - 1)` shifted individual rows by −40% to +256% and reordered the ranking. Sums are carried through from the first stage instead.
+Leaving it to the session default would mean results that differ depending on which machine ran the query. That is not acceptable in a reproducible analysis.
+
+### Decision 5 — which events count
+
+`events` keeps **all 1,202,267 rows**. No filtering is applied when the table is built.
+
+Only `W_` (work item) events have a lifecycle at all; `A_` and `O_` events are instantaneous state changes, always recorded as `complete`. So this decision was only ever about which phases of a work item's life to retain:
+
+| Phase | Events | Meaning |
+|---|---|---|
+| `schedule` | 149,104 | queued, untouched |
+| `start` | 128,227 | picked up |
+| `suspend` | 215,402 | put down |
+| `resume` | 127,160 | picked up again |
+| `complete` | 41,862 | finished |
+| `ate_abort` | 85,224 | abandoned |
+| `withdraw` | 21,844 | cancelled |
+
+Of 149,104 work items scheduled, 128,227 are started and only **41,862 (28%) complete**. 57% are aborted and 15% withdrawn.
+
+**Rationale.** Two narrower options were considered and rejected: keeping only `start`/`complete` (603,533 rows) and keeping `start` plus all endings (710,601 rows). Both discard queue time and pause time, and the strict variant also hides every abandoned work item — 86,365 of them, 67% of everything that starts. Since the engagement question is *where the process stalls*, discarding the failure paths before analysis would remove the most likely location of the answer.
+
+Keeping everything follows the standard warehouse pattern: the fact table records what happened, and each query declares what it wants. It also makes the choice reversible — a narrower `events` table is one `CREATE OR REPLACE TABLE` away, and `raw_events` is never modified.
+
+**Risk accepted.** The filtering decision is not eliminated, only moved into every query, where it must be made correctly each time rather than once. In particular, some events are system-generated cascades firing within milliseconds of one another — `Application_652823628` emits five events inside 27 ms — so any transition or gap calculation must exclude them explicitly or it will report thousands of meaningless near-zero waits.
 
 ### Decision 6 — what counts as a transition, for waiting-time analysis
 
@@ -336,45 +380,19 @@ One is the offer-expiry clock running out; the other is a fresh offer three days
 
 **Right-censored cases are analysed separately.** The 98 cases with no terminal state have tails truncated by the log's cut-off rather than by anything the process did. Their final transition is an artefact of the extract date and is examined on its own rather than pooled into the ranking.
 
-### Decision 5 — which events count
+### Decision 7 — what counts as a repetition, for rework analysis
 
-`events` keeps **all 1,202,267 rows**. No filtering is applied when the table is built.
+Four choices, all made for the Q3 rework ranking in `analysis/07_rework.sql`.
 
-Only `W_` (work item) events have a lifecycle at all; `A_` and `O_` events are instantaneous state changes, always recorded as `complete`. So this decision was only ever about which phases of a work item's life to retain:
+**A repetition is the same `(activity, transition)` pair occurring more than once within one case.** Not the same activity alone: `W_Validate application` emitting `suspend` twice is a loop, but `suspend` followed by `resume` is one work item being picked up again, and counting the activity alone would merge them. This is the same grain rule as decision 6, applied within a case rather than between consecutive events.
 
-| Phase | Events | Meaning |
-|---|---|---|
-| `schedule` | 149,104 | queued, untouched |
-| `start` | 128,227 | picked up |
-| `suspend` | 215,402 | put down |
-| `resume` | 127,160 | picked up again |
-| `complete` | 41,862 | finished |
-| `ate_abort` | 85,224 | abandoned |
-| `withdraw` | 21,844 | cancelled |
+**Adjacency is not required, and requiring it destroys the measure.** An earlier version defined repetition as two identical consecutive events — `from_activity = to_activity AND from_transition = to_transition` on the `transitions` table. That captures **11,702 of 330,747 repeats, 3.5%**, because repetition in this log is almost never adjacent: `W_Validate application` repeats as `suspend → resume → suspend`, with a `resume` in between. Worse, **99.9% of the 11,702 it does capture are sub-second** (median gaps of 2–9 ms) — they are the machine cascades of decision 6, so the measure returned the logging artefact rather than the process. Recorded because the failure is not visible in the output: the ranking it produces looks plausible and is entirely wrong.
 
-Of 149,104 work items scheduled, 128,227 are started and only **41,862 (28%) complete**. 57% are aborted and 15% withdrawn.
+**Elapsed time is attributed to the activity that *ends* the wait, not the one that starts it.** `07` computes each gap with `LAG` partitioned by `case_id`, so `gap_seconds` is the time from the previous event of any kind up to this one — "how long the case waited to reach this activity". `06` uses the `transitions` table grouped by `from_activity`, which attributes the same interval to the activity the case was waiting *in*. **The two files therefore rank the same intervals under different names, and a reader comparing them without knowing this will conclude they contradict.** `O_Create Offer` is the clearest case: 0.53 days under `06` (nothing waits after an offer is written) and 26,509 days under `07` (a great deal waits before one is re-created). Both numbers are correct.
 
-**Rationale.** Two narrower options were considered and rejected: keeping only `start`/`complete` (603,533 rows) and keeping `start` plus all endings (710,601 rows). Both discard queue time and pause time, and the strict variant also hides every abandoned work item — 86,365 of them, 67% of everything that starts. Since the engagement question is *where the process stalls*, discarding the failure paths before analysis would remove the most likely location of the answer.
+**Two totals are reported, and the difference between them is the point.** `total_gap_days` counts every occurrence including the first; `repeat_gap_days` counts only occurrences 2, 3, … identified by `ROW_NUMBER()` within `(case_id, activity, transition)`. The first visit is the one-off wait to reach the activity and is not rework. The gap between the two is large and uneven — for `W_Validate application resume`, 17,993 of 27,091 days sit in first visits, so reporting the total alone would overstate its rework nearly threefold.
 
-Keeping everything follows the standard warehouse pattern: the fact table records what happened, and each query declares what it wants. It also makes the choice reversible — a narrower `events` table is one `CREATE OR REPLACE TABLE` away, and `raw_events` is never modified.
-
-**Risk accepted.** The filtering decision is not eliminated, only moved into every query, where it must be made correctly each time rather than once. In particular, some events are system-generated cascades firing within milliseconds of one another — `Application_652823628` emits five events inside 27 ms — so any transition or gap calculation must exclude them explicitly or it will report thousands of meaningless near-zero waits.
-
-### Decision 4 — timezone
-
-`time:timestamp` is stored as `TIMESTAMP WITH TIME ZONE`: an absolute instant, displayed in whatever the session timezone happens to be. The development machine is set to `Asia/Shanghai`, so DuckDB was rendering the first event as `2016-01-01 17:51:15.304+08` while the same instant is `09:51:15.304+00:00` in UTC.
-
-**All timestamps in this project are interpreted in `Europe/Amsterdam`**, the timezone the business actually operated in. A Dutch bank's "Monday morning" is a fact about Amsterdam, not about the analyst's laptop.
-
-Every SQL file and every database connection sets this explicitly:
-
-```sql
-SET TimeZone = 'Europe/Amsterdam';
-```
-
-Durations are unaffected by this setting — subtraction operates on absolute instants either way. It matters for anything referencing clock time: hour of day, day of week, overnight and weekend effects, and the March and October DST boundaries, both of which fall inside the log window.
-
-Leaving it to the session default would mean results that differ depending on which machine ran the query. That is not acceptable in a reproducible analysis.
+   **A rejected shortcut, recorded because it is arithmetically seductive.** `AVG(gap) × COUNT` does equal `SUM(gap)` exactly — verified across all 187,302 groups to within 10⁻⁹ seconds. But it holds only with `COUNT(gap_seconds)`, since `AVG` skips NULLs while a row count does not, and it cannot produce `repeat_gap_days` at all: subtracting one *mean* per case is not the same as subtracting the first occurrence's *actual* gap. Using `AVG × (COUNT(*) - 1)` shifted individual rows by −40% to +256% and reordered the ranking. Sums are carried through from the first stage instead.
 
 ## Known data quality issues
 
