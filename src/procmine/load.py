@@ -73,6 +73,14 @@ def parquet_to_duckdb(parquet_path: Path, db_path: Path, table: str = "raw_event
     return n_rows
 
 
+# --- stage 3: build analytical tables ---------------------------------
+def build_model(db_path: Path, sql_dir: Path) -> None:
+    """Run every .sql file in sql_dir, in filename order."""
+    with db.connect(db_path) as con:
+        for sql_file in sorted(sql_dir.glob("*.sql")):
+            db.run_sql_file(con, sql_file)
+
+
 def main() -> None:
     """Rebuild the raw DuckDB table from the source XES log."""
     # Log configuration
@@ -85,17 +93,20 @@ def main() -> None:
     project_root = Path(__file__).resolve().parents[2]
     raw = project_root / "data" / "raw" / "BPI_Challenge_2017.xes.gz"
     parquet = project_root / "data" / "processed" / "raw_events.parquet"
-    db = project_root / "data" / "processed" / "loans.duckdb"
+    db_path = project_root / "data" / "processed" / "loans.duckdb"
+    sql_dir = project_root / "sql"
 
     # Final things
     n_parquet = xes_to_parquet(raw, parquet)
-    n_db = parquet_to_duckdb(parquet, db)
+    n_db = parquet_to_duckdb(parquet, db_path)
 
     # The two counts must agree; a silent row loss would not announce itself.
     if n_parquet != n_db:
         raise RuntimeError(f"row count mismatch: parquet {n_parquet:,}, duckdb {n_db:,}")
 
-    logger.info("done: %s rows in %s", f"{n_db:,}", db)
+    # Finally build the model and give a final logger.
+    build_model(db_path, sql_dir)
+    logger.info("done: %s rows in %s", f"{n_db:,}", db_path)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+# Normalise line endings in the repository to LF.
+#
+# One .sql file arrived with CRLF and was silently converted to LF by a Python
+# rewrite (read_text translates CRLF to LF; write_text writes LF), turning a
+# one-line change into a 47-line diff. Declaring the convention here means git
+# normalises on commit regardless of which platform or tool touched the file,
+# so a diff shows the change and nothing else.
+* text=auto eol=lf
+
+# Binary: never touch these.
+*.parquet binary
+*.duckdb  binary
+*.gz      binary
+*.png     binary
