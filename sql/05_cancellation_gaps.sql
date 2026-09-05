@@ -2,7 +2,7 @@
 --
 -- Is A_Cancelled produced by an automated inactivity timeout?
 --
--- Produces: cancellation_gaps — grain is one row per (cancelled case, anchor).
+-- Produces: cancellation_gaps, grain is one row per (cancelled case, anchor).
 -- Reads:    events
 -- Why:      76% of A_Cancelled events are performed by User_1, and cancelled
 --           cases run 2.1x longer than successful ones (31.6 vs 14.8 days
@@ -70,7 +70,7 @@ WITH joined_with_prev AS (
     GROUP BY c.case_id, cancelled_at
 UNION ALL
     -- anchor B: from the event immediately before the cancellation
-    -- (this one needs LAG — see note)
+    -- (this one needs LAG, see note)
     SELECT 
         case_id, 
         'previous_event' AS gap_from, 

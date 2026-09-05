@@ -1,10 +1,10 @@
-# Fixture cases — readable listing
+# Fixture cases: readable listing
 
 Work the expected figures out from this by hand. Do not compute them
 with the SQL you are testing; that would prove nothing.
 
 ## Application_919038062
-*simple path - one offer, accepted* — 22 events
+*simple path - one offer, accepted*: 22 events
 
 ```
 timestamp                  activity                   lifecycle  resource
@@ -33,7 +33,7 @@ timestamp                  activity                   lifecycle  resource
 ```
 
 ## Application_2098856182
-*two offers, cancelled* — 13 events
+*two offers, cancelled*: 13 events
 
 ```
 timestamp                  activity                   lifecycle  resource
@@ -53,7 +53,7 @@ timestamp                  activity                   lifecycle  resource
 ```
 
 ## Application_323048075
-*rework - an A_ activity repeats, denied* — 30 events
+*rework - an A_ activity repeats, denied*: 30 events
 
 ```
 timestamp                  activity                   lifecycle  resource
@@ -90,7 +90,7 @@ timestamp                  activity                   lifecycle  resource
 ```
 
 ## Application_682602203
-*aborted work item, cancelled* — 11 events
+*aborted work item, cancelled*: 11 events
 
 ```
 timestamp                  activity                   lifecycle  resource
@@ -108,7 +108,7 @@ timestamp                  activity                   lifecycle  resource
 ```
 
 ## Application_1291275220
-*right-censored - no terminal state* — 18 events
+*right-censored - no terminal state*, 18 events
 
 ```
 timestamp                  activity                   lifecycle  resource

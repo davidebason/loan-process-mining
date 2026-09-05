@@ -5,7 +5,7 @@
 -- Reads: transitions (built by sql/06)
 --
 -- Sub-second pairs are kept in the row counts and the totals, and excluded from
--- the percentiles via FILTER — see DATA.md decision 6. They are 44.9% of rows and
+-- the percentiles via FILTER, see DATA.md decision 6. They are 44.9% of rows and
 -- 0.0001% of elapsed time, so dropping them outright would break reconciliation
 -- against case duration while leaving every total unchanged; but including them in
 -- a median drags it into the noise (W_Complete application start->complete: 5
@@ -92,14 +92,14 @@ LIMIT 20
 ;
 
 -- 4. All three families pooled, ranked by median rather than by total.
---    1-3 answer "where does the aggregate time pool sit" — a capacity question.
---    This answers "when this step happens, how long does that case wait" — a
+--    1-3 answer "where does the aggregate time pool sit", a capacity question.
+--    This answers "when this step happens, how long does that case wait": a
 --    severity question. The two diverge when n is small: a step occurring 158
 --    times with a 7.8-day median is 0.2% of elapsed time and invisible above.
 --    HAVING COUNT(*) >= 100 so that a median rests on ~50 observations a side;
 --    without it the ranking opens on groups of n = 1.
 --    gap_kind is a pure function of from_transition (verified: no from_transition
---    carries two gap_kinds), so grouping by it splits nothing — it is display.
+--    carries two gap_kinds), so grouping by it splits nothing: it is display.
 SELECT
     gap_kind,
     same_activity,

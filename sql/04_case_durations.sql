@@ -2,7 +2,7 @@
 --
 -- Q1: how long does an application take end to end, and how does that vary?
 --
--- Produces: case_durations — grain is one row per application.
+-- Produces: case_durations, grain is one row per application.
 -- Reads:    events
 -- Caveat:   98 cases have no terminal state; their span is truncated by the
 --           log's cut-off, not by the process ending. See DATA.md.
@@ -36,7 +36,7 @@ SELECT
     MAX(duration_hours) AS max_duration
 FROM case_durations;
 
--- 4. Split by outcome — censored cases are truncated, and denied cases
+-- 4. Split by outcome, censored cases are truncated, and denied cases
 --    almost certainly behave differently from successful ones.
 SELECT
     outcome,

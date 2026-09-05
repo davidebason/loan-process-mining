@@ -2,7 +2,7 @@
 --
 -- Q2: between which two activities does the most waiting time accumulate?
 --
--- Produces: transitions — grain is one row per consecutive pair of events
+-- Produces: transitions, grain is one row per consecutive pair of events
 --           within a case. Every event has a predecessor except its case's
 --           first, so 1,202,267 - 31,509 = 1,170,758 pairs before filtering.
 -- Reads:    events
