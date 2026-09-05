@@ -94,3 +94,46 @@ FROM joined
 ;
 
 SELECT * FROM cost_of_shorter_expiry;
+
+
+-- 4. The same cost at every threshold the memo quotes, not just dt.
+--    REPORT.md: "Tested at 7, 14, 21, 25 and 30 days. It loses at every one",
+--    and "19.9% of principal at 21 days, 13.6% at 25, and 7.9% even at 30".
+.print
+.print === 4. cost of a shorter expiry, at every threshold tested ===
+WITH accepted AS (
+    SELECT case_id,
+           MAX(CASE WHEN activity = 'O_Accepted' THEN offer_id END)   AS offer_id,
+           MAX(CASE WHEN activity = 'O_Accepted' THEN event_time END) AS accepted_at
+    FROM events GROUP BY case_id
+    HAVING MAX(CASE WHEN activity = 'O_Accepted' THEN offer_id END) IS NOT NULL
+),
+sent AS (
+    SELECT offer_id, MAX(event_time) AS sent_at
+    FROM events
+    WHERE starts_with(activity, 'O_Sent') AND offer_id IS NOT NULL
+    GROUP BY offer_id
+),
+joined AS (
+    SELECT o.offered_amount,
+           o.monthly_cost * o.number_terms - o.offered_amount            AS gross_interest,
+           (epoch(a.accepted_at) - epoch(s.sent_at)) / 86400.0           AS gap_days
+    FROM accepted a
+    JOIN sent   s ON s.offer_id = a.offer_id
+    JOIN offers o ON o.offer_id = a.offer_id
+),
+thresholds AS (SELECT UNNEST([7, 14, 21, 25, 30]) AS dt)
+SELECT
+    t.dt                                                                 AS expiry_days,
+    COUNT(*) FILTER (WHERE j.gap_days > t.dt)                            AS conversions_lost,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE j.gap_days > t.dt) / COUNT(*), 1) AS pct_conversions,
+    ROUND(SUM(j.offered_amount) FILTER (WHERE j.gap_days > t.dt) / 1e6, 1) AS principal_lost_m,
+    ROUND(100.0 * SUM(j.offered_amount) FILTER (WHERE j.gap_days > t.dt)
+          / SUM(j.offered_amount), 1)                                    AS pct_principal,
+    ROUND(SUM(j.gross_interest) FILTER (WHERE j.gap_days > t.dt) / 1e6, 1) AS interest_lost_m,
+    ROUND(100.0 * SUM(j.gross_interest) FILTER (WHERE j.gap_days > t.dt)
+          / SUM(j.gross_interest), 1)                                    AS pct_interest
+FROM joined j CROSS JOIN thresholds t
+GROUP BY t.dt
+ORDER BY t.dt
+;
