@@ -33,7 +33,7 @@ sql/            the model: events, offers, cases, durations, transitions
 analysis/       one numbered file per question, plus 08 which regenerates every
                 figure quoted in the memo and 09 which sizes the proposed trial
 src/procmine/   ingestion and database helpers, importable and tested
-tests/          37 tests against a five-case fixture whose answers were computed on paper
+tests/          run against a five-case fixture whose answers were computed on paper
 figures/        the figure above, regenerated from the database
 ```
 
