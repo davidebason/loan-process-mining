@@ -63,7 +63,7 @@ XMAX = 45
 INK = "#1a1a1a"
 MUTED = "#666666"
 GRID = "#d8d8d8"
-ACCEPTED = "#2166ac"   # blue
+ACCEPTED = "#2166ac"  # blue
 CANCELLED = "#b2182b"  # red
 
 
@@ -88,11 +88,17 @@ def build(series: dict[str, list[float]], excluded: dict[str, int]) -> plt.Figur
     bins = range(0, XMAX + 1)
 
     ax.hist(
-        series["A_Pending"], bins=bins, color=ACCEPTED, alpha=0.85,
+        series["A_Pending"],
+        bins=bins,
+        color=ACCEPTED,
+        alpha=0.85,
         label=f"Accepted  (n={len(series['A_Pending']):,})",
     )
     ax.hist(
-        series["A_Cancelled"], bins=bins, color=CANCELLED, alpha=0.85,
+        series["A_Cancelled"],
+        bins=bins,
+        color=CANCELLED,
+        alpha=0.85,
         label=f"Cancelled  (n={len(series['A_Cancelled']):,})",
     )
 
@@ -105,9 +111,11 @@ def build(series: dict[str, list[float]], excluded: dict[str, int]) -> plt.Figur
         "This is an automated expiry, not a decision.",
         xy=(EXPIRY_DAYS - 0.4, top * 0.96),
         xytext=(EXPIRY_DAYS - 5.5, top * 0.70),
-        color=INK, fontsize=9.5, ha="right", va="center",
-        arrowprops={"arrowstyle": "->", "color": INK, "lw": 1,
-                    "connectionstyle": "arc3,rad=0.28"},
+        color=INK,
+        fontsize=9.5,
+        ha="right",
+        va="center",
+        arrowprops={"arrowstyle": "->", "color": INK, "lw": 1, "connectionstyle": "arc3,rad=0.28"},
     )
 
     ax.axvspan(PROPOSED_CUT, XMAX, color="#000000", alpha=0.045, zorder=0)
@@ -117,7 +125,10 @@ def build(series: dict[str, list[float]], excluded: dict[str, int]) -> plt.Figur
         "everything shaded: 3.5 days of median\n"
         "cycle time saved, 6,880 conversions lost.",
         xy=(PROPOSED_CUT + 0.6, top * 0.40),
-        color=INK, fontsize=9.5, ha="left", va="center",
+        color=INK,
+        fontsize=9.5,
+        ha="left",
+        va="center",
     )
 
     ax.set_xlabel("Days from the last offer being sent to the application being resolved")
@@ -125,7 +136,11 @@ def build(series: dict[str, list[float]], excluded: dict[str, int]) -> plt.Figur
     ax.set_xlim(0, XMAX)
     ax.set_title(
         "Cancellations are a timer expiring, not customers saying no",
-        fontsize=13.5, fontweight="bold", color=INK, loc="left", pad=14,
+        fontsize=13.5,
+        fontweight="bold",
+        color=INK,
+        loc="left",
+        pad=14,
     )
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}"))
     ax.legend(frameon=False, loc="upper left", fontsize=10)
@@ -137,12 +152,15 @@ def build(series: dict[str, list[float]], excluded: dict[str, int]) -> plt.Figur
         ax.spines[side].set_color(GRID)
 
     fig.text(
-        0.125, -0.02,
+        0.125,
+        -0.02,
         "BPI Challenge 2017. Applications resolved within 45 days of the last offer; "
         f"{excluded['A_Pending']} accepted and {excluded['A_Cancelled']} cancelled "
         "cases fall outside that window. "
         "Source: sql/05_cancellation_gaps.sql, analysis/01, analysis/02.",
-        fontsize=8, color=MUTED, ha="left",
+        fontsize=8,
+        color=MUTED,
+        ha="left",
     )
     fig.tight_layout()
     return fig
@@ -160,8 +178,11 @@ def main() -> None:
     fig.savefig(OUT_PATH, bbox_inches="tight", facecolor="white")
     logger.info(
         "wrote %s  (accepted %d, cancelled %d; excluded %d / %d)",
-        OUT_PATH, len(series["A_Pending"]), len(series["A_Cancelled"]),
-        excluded["A_Pending"], excluded["A_Cancelled"],
+        OUT_PATH,
+        len(series["A_Pending"]),
+        len(series["A_Cancelled"]),
+        excluded["A_Pending"],
+        excluded["A_Cancelled"],
     )
 
 

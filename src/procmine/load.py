@@ -72,12 +72,14 @@ def parquet_to_duckdb(parquet_path: Path, db_path: Path, table: str = "raw_event
 
     return n_rows
 
+
 # --- stage 3: build analytical tables ---------------------------------
 def build_model(db_path: Path, sql_dir: Path) -> None:
     """Run every .sql file in sql_dir, in filename order."""
     with db.connect(db_path) as con:
         for sql_file in sorted(sql_dir.glob("*.sql")):
             db.run_sql_file(con, sql_file)
+
 
 def main() -> None:
     """Rebuild the raw DuckDB table from the source XES log."""
